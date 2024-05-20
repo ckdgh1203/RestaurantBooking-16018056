@@ -1,0 +1,181 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+	<head>
+        <meta charset="utf-8"/>
+	    <title>gmock-cardinalities.cc</title>
+	    <link href="../../third-party/google-code-prettify/prettify-CppCoverage.css" type="text/css" rel="stylesheet" />
+	    <script type="text/javascript" src="../../third-party/google-code-prettify/prettify.js"></script>
+	</head>
+    <body onload="prettyPrint()">
+        <h4></h4>
+        <pre class="prettyprint lang-cpp linenums">
+// Copyright 2007, Google Inc.
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//     * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//     * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+// Google Mock - a framework for writing C++ mock classes.
+//
+// This file implements cardinalities.
+
+#include "gmock/gmock-cardinalities.h"
+
+#include &lt;limits.h&gt;
+#include &lt;ostream&gt;  // NOLINT
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+#include "gmock/internal/gmock-internal-utils.h"
+#include "gtest/gtest.h"
+
+namespace testing {
+
+namespace {
+
+// Implements the Between(m, n) cardinality.
+class BetweenCardinalityImpl : public CardinalityInterface {
+ public:
+  BetweenCardinalityImpl(int min, int max)
+<span style = "background-color:#fdd">      : min_(min &gt;= 0 ? min : 0),
+        max_(max &gt;= min_ ? max : min_) {
+    std::stringstream ss;
+    if (min &lt; 0) {
+      ss &lt;&lt; "The invocation lower bound must be &gt;= 0, "</span>
+         &lt;&lt; "but is actually " &lt;&lt; min &lt;&lt; ".";
+<span style = "background-color:#fdd">      internal::Expect(false, __FILE__, __LINE__, ss.str());
+    } else if (max &lt; 0) {
+      ss &lt;&lt; "The invocation upper bound must be &gt;= 0, "</span>
+         &lt;&lt; "but is actually " &lt;&lt; max &lt;&lt; ".";
+<span style = "background-color:#fdd">      internal::Expect(false, __FILE__, __LINE__, ss.str());
+    } else if (min &gt; max) {
+      ss &lt;&lt; "The invocation upper bound (" &lt;&lt; max</span>
+         &lt;&lt; ") must be &gt;= the invocation lower bound (" &lt;&lt; min
+         &lt;&lt; ").";
+<span style = "background-color:#fdd">      internal::Expect(false, __FILE__, __LINE__, ss.str());</span>
+    }
+<span style = "background-color:#fdd">  }</span>
+
+  // Conservative estimate on the lower/upper bound of the number of
+  // calls allowed.
+<span style = "background-color:#fdd">  int ConservativeLowerBound() const override { return min_; }
+  int ConservativeUpperBound() const override { return max_; }</span>
+
+<span style = "background-color:#fdd">  bool IsSatisfiedByCallCount(int call_count) const override {
+    return min_ &lt;= call_count &amp;&amp; call_count &lt;= max_;
+  }</span>
+
+<span style = "background-color:#fdd">  bool IsSaturatedByCallCount(int call_count) const override {
+    return call_count &gt;= max_;
+  }</span>
+
+  void DescribeTo(::std::ostream* os) const override;
+
+ private:
+  const int min_;
+  const int max_;
+
+  GTEST_DISALLOW_COPY_AND_ASSIGN_(BetweenCardinalityImpl);
+};
+
+// Formats "n times" in a human-friendly way.
+<span style = "background-color:#fdd">inline std::string FormatTimes(int n) {
+  if (n == 1) {
+    return "once";
+  } else if (n == 2) {
+    return "twice";
+  } else {
+    std::stringstream ss;
+    ss &lt;&lt; n &lt;&lt; " times";
+    return ss.str();</span>
+  }
+<span style = "background-color:#fdd">}</span>
+
+// Describes the Between(m, n) cardinality in human-friendly text.
+<span style = "background-color:#fdd">void BetweenCardinalityImpl::DescribeTo(::std::ostream* os) const {
+  if (min_ == 0) {
+    if (max_ == 0) {
+      *os &lt;&lt; "never called";
+    } else if (max_ == INT_MAX) {
+      *os &lt;&lt; "called any number of times";
+    } else {
+      *os &lt;&lt; "called at most " &lt;&lt; FormatTimes(max_);
+    }
+  } else if (min_ == max_) {
+    *os &lt;&lt; "called " &lt;&lt; FormatTimes(min_);
+  } else if (max_ == INT_MAX) {
+    *os &lt;&lt; "called at least " &lt;&lt; FormatTimes(min_);
+  } else {</span>
+    // 0 &lt; min_ &lt; max_ &lt; INT_MAX
+<span style = "background-color:#fdd">    *os &lt;&lt; "called between " &lt;&lt; min_ &lt;&lt; " and " &lt;&lt; max_ &lt;&lt; " times";</span>
+  }
+<span style = "background-color:#fdd">}</span>
+
+}  // Unnamed namespace
+
+// Describes the given call count to an ostream.
+void Cardinality::DescribeActualCallCountTo(int actual_call_count,
+<span style = "background-color:#fdd">                                            ::std::ostream* os) {
+  if (actual_call_count &gt; 0) {
+    *os &lt;&lt; "called " &lt;&lt; FormatTimes(actual_call_count);
+  } else {
+    *os &lt;&lt; "never called";</span>
+  }
+<span style = "background-color:#fdd">}</span>
+
+// Creates a cardinality that allows at least n calls.
+<span style = "background-color:#fdd">GTEST_API_ Cardinality AtLeast(int n) { return Between(n, INT_MAX); }</span>
+
+// Creates a cardinality that allows at most n calls.
+<span style = "background-color:#fdd">GTEST_API_ Cardinality AtMost(int n) { return Between(0, n); }</span>
+
+// Creates a cardinality that allows any number of calls.
+<span style = "background-color:#fdd">GTEST_API_ Cardinality AnyNumber() { return AtLeast(0); }</span>
+
+// Creates a cardinality that allows between min and max calls.
+<span style = "background-color:#fdd">GTEST_API_ Cardinality Between(int min, int max) {
+  return Cardinality(new BetweenCardinalityImpl(min, max));
+}</span>
+
+// Creates a cardinality that allows exactly n calls.
+<span style = "background-color:#fdd">GTEST_API_ Cardinality Exactly(int n) { return Between(n, n); }</span>
+
+}  // namespace testing</pre>
+        <hr />
+        <table width="100%">
+            <thead>
+                <tr>
+                    <th align="center">
+                        <small>Generated by</small>
+                        <a href="https://github.com/OpenCppCoverage/OpenCppCoverage/releases">
+                            <strong>OpenCppCoverage (Version: 0.9.9.0)</strong>
+                        </a>
+                    </th>
+                </tr>
+            </thead>
+        </table>
+    </body>
+</html>

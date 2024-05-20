@@ -1,0 +1,226 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+	<head>
+        <meta charset="utf-8"/>
+	    <title>gmock-internal-utils.cc</title>
+	    <link href="../../third-party/google-code-prettify/prettify-CppCoverage.css" type="text/css" rel="stylesheet" />
+	    <script type="text/javascript" src="../../third-party/google-code-prettify/prettify.js"></script>
+	</head>
+    <body onload="prettyPrint()">
+        <h4></h4>
+        <pre class="prettyprint lang-cpp linenums">
+// Copyright 2007, Google Inc.
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are
+// met:
+//
+//     * Redistributions of source code must retain the above copyright
+// notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above
+// copyright notice, this list of conditions and the following disclaimer
+// in the documentation and/or other materials provided with the
+// distribution.
+//     * Neither the name of Google Inc. nor the names of its
+// contributors may be used to endorse or promote products derived from
+// this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+// Google Mock - a framework for writing C++ mock classes.
+//
+// This file defines some utilities useful for implementing Google
+// Mock.  They are subject to change without notice, so please DO NOT
+// USE THEM IN USER CODE.
+
+#include "gmock/internal/gmock-internal-utils.h"
+
+#include &lt;ctype.h&gt;
+#include &lt;ostream&gt;  // NOLINT
+#include &lt;string&gt;
+#include "gmock/gmock.h"
+#include "gmock/internal/gmock-port.h"
+#include "gtest/gtest.h"
+
+namespace testing {
+namespace internal {
+
+// Joins a vector of strings as if they are fields of a tuple; returns
+// the joined string.
+<span style = "background-color:#fdd">GTEST_API_ std::string JoinAsTuple(const Strings&amp; fields) {
+  switch (fields.size()) {</span>
+    case 0:
+<span style = "background-color:#fdd">      return "";</span>
+    case 1:
+<span style = "background-color:#fdd">      return fields[0];</span>
+    default:
+<span style = "background-color:#fdd">      std::string result = "(" + fields[0];
+      for (size_t i = 1; i &lt; fields.size(); i++) {
+        result += ", ";
+        result += fields[i];
+      }
+      result += ")";
+      return result;</span>
+  }
+<span style = "background-color:#fdd">}</span>
+
+// Converts an identifier name to a space-separated list of lower-case
+// words.  Each maximum substring of the form [A-Za-z][a-z]*|\d+ is
+// treated as one word.  For example, both "FooBar123" and
+// "foo_bar_123" are converted to "foo bar 123".
+<span style = "background-color:#fdd">GTEST_API_ std::string ConvertIdentifierNameToWords(const char* id_name) {
+  std::string result;
+  char prev_char = '\0';
+  for (const char* p = id_name; *p != '\0'; prev_char = *(p++)) {</span>
+    // We don't care about the current locale as the input is
+    // guaranteed to be a valid C++ identifier name.
+<span style = "background-color:#fdd">    const bool starts_new_word = IsUpper(*p) ||</span>
+        (!IsAlpha(prev_char) &amp;&amp; IsLower(*p)) ||
+        (!IsDigit(prev_char) &amp;&amp; IsDigit(*p));
+
+<span style = "background-color:#fdd">    if (IsAlNum(*p)) {
+      if (starts_new_word &amp;&amp; result != "")
+        result += ' ';
+      result += ToLower(*p);</span>
+    }
+<span style = "background-color:#fdd">  }
+  return result;
+}</span>
+
+// This class reports Google Mock failures as Google Test failures.  A
+// user can define another class in a similar fashion if they intend to
+// use Google Mock with a testing framework other than Google Test.
+class GoogleTestFailureReporter : public FailureReporterInterface {
+ public:
+  void ReportFailure(FailureType type, const char* file, int line,
+<span style = "background-color:#fdd">                     const std::string&amp; message) override {
+    AssertHelper(type == kFatal ?</span>
+                 TestPartResult::kFatalFailure :
+                 TestPartResult::kNonFatalFailure,
+                 file,
+                 line,
+                 message.c_str()) = Message();
+<span style = "background-color:#fdd">    if (type == kFatal) {
+      posix::Abort();</span>
+    }
+<span style = "background-color:#fdd">  }</span>
+};
+
+// Returns the global failure reporter.  Will create a
+// GoogleTestFailureReporter and return it the first time called.
+<span style = "background-color:#fdd">GTEST_API_ FailureReporterInterface* GetFailureReporter() {</span>
+  // Points to the global failure reporter used by Google Mock.  gcc
+  // guarantees that the following use of failure_reporter is
+  // thread-safe.  We may need to add additional synchronization to
+  // protect failure_reporter if we port Google Mock to other
+  // compilers.
+<span style = "background-color:#fdd">  static FailureReporterInterface* const failure_reporter =</span>
+      new GoogleTestFailureReporter();
+<span style = "background-color:#fdd">  return failure_reporter;
+}</span>
+
+// Protects global resources (stdout in particular) used by Log().
+<span style = "background-color:#dfd">static GTEST_DEFINE_STATIC_MUTEX_(g_log_mutex);</span>
+
+// Returns true if and only if a log with the given severity is visible
+// according to the --gmock_verbose flag.
+<span style = "background-color:#fdd">GTEST_API_ bool LogIsVisible(LogSeverity severity) {
+  if (GMOCK_FLAG(verbose) == kInfoVerbosity) {</span>
+    // Always show the log if --gmock_verbose=info.
+<span style = "background-color:#fdd">    return true;
+  } else if (GMOCK_FLAG(verbose) == kErrorVerbosity) {</span>
+    // Always hide it if --gmock_verbose=error.
+<span style = "background-color:#fdd">    return false;
+  } else {</span>
+    // If --gmock_verbose is neither "info" nor "error", we treat it
+    // as "warning" (its default value).
+<span style = "background-color:#fdd">    return severity == kWarning;</span>
+  }
+<span style = "background-color:#fdd">}</span>
+
+// Prints the given message to stdout if and only if 'severity' &gt;= the level
+// specified by the --gmock_verbose flag.  If stack_frames_to_skip &gt;=
+// 0, also prints the stack trace excluding the top
+// stack_frames_to_skip frames.  In opt mode, any positive
+// stack_frames_to_skip is treated as 0, since we don't know which
+// function calls will be inlined by the compiler and need to be
+// conservative.
+GTEST_API_ void Log(LogSeverity severity, const std::string&amp; message,
+<span style = "background-color:#fdd">                    int stack_frames_to_skip) {
+  if (!LogIsVisible(severity))
+    return;</span>
+
+  // Ensures that logs from different threads don't interleave.
+<span style = "background-color:#fdd">  MutexLock l(&amp;g_log_mutex);</span>
+
+<span style = "background-color:#fdd">  if (severity == kWarning) {</span>
+    // Prints a GMOCK WARNING marker to make the warnings easily searchable.
+<span style = "background-color:#fdd">    std::cout &lt;&lt; "\nGMOCK WARNING:";</span>
+  }
+  // Pre-pends a new-line to message if it doesn't start with one.
+<span style = "background-color:#fdd">  if (message.empty() || message[0] != '\n') {
+    std::cout &lt;&lt; "\n";</span>
+  }
+<span style = "background-color:#fdd">  std::cout &lt;&lt; message;
+  if (stack_frames_to_skip &gt;= 0) {</span>
+#ifdef NDEBUG
+    // In opt mode, we have to be conservative and skip no stack frame.
+    const int actual_to_skip = 0;
+#else
+    // In dbg mode, we can do what the caller tell us to do (plus one
+    // for skipping this function's stack frame).
+<span style = "background-color:#fdd">    const int actual_to_skip = stack_frames_to_skip + 1;</span>
+#endif  // NDEBUG
+
+    // Appends a new-line to message if it doesn't end with one.
+<span style = "background-color:#fdd">    if (!message.empty() &amp;&amp; *message.rbegin() != '\n') {
+      std::cout &lt;&lt; "\n";</span>
+    }
+<span style = "background-color:#fdd">    std::cout &lt;&lt; "Stack trace:\n"</span>
+         &lt;&lt; ::testing::internal::GetCurrentOsStackTraceExceptTop(
+             ::testing::UnitTest::GetInstance(), actual_to_skip);
+  }
+<span style = "background-color:#fdd">  std::cout &lt;&lt; ::std::flush;
+}</span>
+
+<span style = "background-color:#fdd">GTEST_API_ WithoutMatchers GetWithoutMatchers() { return WithoutMatchers(); }</span>
+
+<span style = "background-color:#fdd">GTEST_API_ void IllegalDoDefault(const char* file, int line) {
+  internal::Assert(</span>
+      false, file, line,
+      "You are using DoDefault() inside a composite action like "
+      "DoAll() or WithArgs().  This is not supported for technical "
+      "reasons.  Please instead spell out the default action, or "
+      "assign the default action to an Action variable and use "
+      "the variable in various places.");
+<span style = "background-color:#fdd">}</span>
+
+}  // namespace internal
+}  // namespace testing</pre>
+        <hr />
+        <table width="100%">
+            <thead>
+                <tr>
+                    <th align="center">
+                        <small>Generated by</small>
+                        <a href="https://github.com/OpenCppCoverage/OpenCppCoverage/releases">
+                            <strong>OpenCppCoverage (Version: 0.9.9.0)</strong>
+                        </a>
+                    </th>
+                </tr>
+            </thead>
+        </table>
+    </body>
+</html>
